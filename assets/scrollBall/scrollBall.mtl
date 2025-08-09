@@ -1,0 +1,22 @@
+{
+  "__type__": "cc.Material",
+  "_name": "scrollBall",
+  "_objFlags": 0,
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "c541cdf8-5834-4a1b-993c-3194fb0aef98"
+  },
+  "_techniqueIndex": 0,
+  "_techniqueData": {
+    "0": {
+      "defines": {
+        "USE_TEXTURE": true
+      },
+      "props": {
+        "surfaceTexture": {
+          "__uuid__": "5dc16298-4fa5-4b6b-9210-ec8c3df53a47"
+        }
+      }
+    }
+  }
+}

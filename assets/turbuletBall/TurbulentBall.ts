@@ -33,7 +33,7 @@ export default class TurbulentBall extends cc.Component {
         'turbulenceOctaves': [1.0, 20.0],
         'turbulenceExp': [1.0, 3.0],
         'turbulenceIntensity': [0.0, 2.0],
-        'colorIntensity': [0.0, 3.0],
+        'colorIntensity': [0.0, 8.0],
     };
 
     private material: cc.Material;

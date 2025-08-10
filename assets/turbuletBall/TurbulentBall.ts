@@ -17,7 +17,7 @@ export default class TurbulentBall extends cc.Component {
     private sliders: cc.Node = null;
 
     private scrollAxis = cc.v3(1, 0, 0);
-    private scrollSpeed = 0.5;
+    private scrollSpeed = 0.9;
     private propMap: { [key: string]: number } = {};
     
     private mat = [

@@ -64,6 +64,17 @@ CCEffect %{
         # 范围说明：0.0=完全黑色，1.0=原始亮度，3.0=高强度发光效果
         # 视觉效果：值越大颜色越鲜艳明亮，可产生发光或过曝效果
         colorIntensity: { value: 1.0, range: [0.4, 1.5] }
+        
+        # ========== 明暗调制参数 ==========
+        # 变亮范围 - 控制湍流效果中的高光强度
+        # 范围说明：0.0=无变亮效果，0.3=中等高光，0.6=强烈高光
+        # 视觉效果：值越大高光区域越明亮，产生更强的对比效果
+        brightenRange: { value: 0.30, range: [0.0, 0.6], editor: { displayName: "变亮范围" } }
+        
+        # 变暗范围 - 控制湍流效果中的阴影深度
+        # 范围说明：0.0=无变暗效果，0.15=中等阴影，0.4=深度阴影
+        # 视觉效果：值越大阴影区域越暗，但过大会丢失细节
+        darkenRange: { value: 0.05, range: [0.0, 0.4], editor: { displayName: "变暗范围" } }
 }%
 
 
@@ -137,6 +148,8 @@ CCProgram fs %{
     float turbulenceExp;
     float turbulenceIntensity;
     float colorIntensity;   // 颜色强度倍数
+    float brightenRange;    // 变亮范围
+    float darkenRange;      // 变暗范围
   };
 
   /**
@@ -257,13 +270,13 @@ CCProgram fs %{
   }
 
   /**
-   * 程序化颜色生成函数 - 明暗分离控制版本
+   * 程序化颜色生成函数 - 可控明暗分离版本
    * 功能：只调制HSV中的V（明度），保持H（色相）和S（饱和度）不变
-   * 特点：分别控制变亮和变暗的幅度，提供更精细的明度调节
+   * 特点：通过uniform参数分别控制变亮和变暗的幅度，用户可在材质面板中实时调节
    * 
-   * 控制参数：
-   * - brightenRange: 变亮范围（默认15%）
-   * - darkenRange: 变暗范围（默认5%）
+   * 可控参数：
+   * - brightenRange: 变亮范围 [0.0, 0.6]，控制高光强度
+   * - darkenRange: 变暗范围 [0.0, 0.4]，控制阴影深度
    */
   vec3 generateProceduralColor(vec2 turbulentPos)
   {
@@ -279,9 +292,8 @@ CCProgram fs %{
       // 根据原始明度动态确定变化范围，明暗分开控制
       float originalValue = hsv.z;
       
-      // 分别定义变亮和变暗的幅度（可独立调节）
-      const float brightenRange = 0.15;  // 变亮范围：15%
-      const float darkenRange = 0.05;    // 变暗范围：5%
+      // 使用uniform参数控制变亮和变暗的幅度
+      // brightenRange 和 darkenRange 现在可以在材质面板中调节
       
       // 计算基于原始明度的分离变化范围
       float minValue = max(0.1, originalValue - darkenRange);   // 下限：原值-darkenRange

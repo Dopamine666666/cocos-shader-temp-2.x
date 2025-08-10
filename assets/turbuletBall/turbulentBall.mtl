@@ -12,9 +12,9 @@
       "props": {
         "overallColor": {
           "__type__": "cc.Color",
-          "r": 0,
-          "g": 213,
-          "b": 0,
+          "r": 226,
+          "g": 187,
+          "b": 3,
           "a": 255
         },
         "lightDirection": {
@@ -24,7 +24,8 @@
           "z": 0.6,
           "w": 0
         },
-        "colorIntensity": 1
+        "colorIntensity": 1.05,
+        "brightenRange": 0.3
       },
       "defines": {
         "USE_TEXTURE": true

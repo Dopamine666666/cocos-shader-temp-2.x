@@ -18,6 +18,11 @@ CCEffect %{
         matrixRow1: { value: [0, 1, 0, 0] }
         matrixRow2: { value: [0, 0, 1, 0] }
         matrixRow3: { value: [0, 0, 0, 1] }
+        # ========== 光照参数 ==========
+        # 光源方向 - 控制阴影的方向和角度
+        # 默认值：(0.5, 0.8, 1.0, 0.0) 表示来自右上前方的光源，第4个分量保留
+        # 视觉效果：调整XYZ分量可改变光照角度，创造不同的阴影效果
+        lightDirection: { value: [0.3, -0.4, 0.6, 0.0], editor: { displayName: "光源方向" } }
         # ========== 湍流效果核心参数 ==========
         # 湍流动画速度 - 控制湍流模式的时间变化速度
         # 范围说明：0.0=静态，0.3=缓慢流动，1.0=中等速度，2.0=快速流动
@@ -117,6 +122,11 @@ CCProgram fs %{
     vec4 matrixRow3;
   };
 
+  // 光照参数
+  uniform LightingParam {
+    vec4 lightDirection;  // 光源方向(xyz为方向，w分量保留)
+  };
+
   // 湍流效果参数
   uniform Turbulence {
     vec4 overallColor;      // 整体颜色调制
@@ -207,6 +217,52 @@ CCProgram fs %{
       return col;
   }
 
+  /**
+   * 球面光照计算函数 - 平滑阴影版本
+   * 功能：根据球面法向量和光源方向计算平滑的光照强度
+   * 
+   * 参数：
+   * @param spherePos - 标准化的球面坐标
+   * @return 光照强度系数 [0.2, 1.0]
+   * 
+   * 原理：
+   * 1. 使用朗伯光照模型计算基础光照：dot(normal, lightDir)
+   * 2. 使用smoothstep(-0.2, 0.3, lightIntensity)创建平滑过渡：
+   *    - 当lightIntensity < -0.2时，输出0（完全阴影）
+   *    - 当lightIntensity > 0.3时，输出1（完全光照）
+   *    - 在-0.2到0.3之间平滑插值，消除硬阴影边界
+   * 3. 结合环境光确保最暗区域仍有基础亮度
+   * 
+   * 注意：此系数用于调制湍流纹理亮度，通过公式 proceduralColor * (0.7 + 0.3 * lightingFactor)
+   *      确保湍流纹理在阴影区域仍保持70%的基础可见度
+   */
+  float calculateLighting(vec3 spherePos)
+  {
+      // 球面法向量（球面坐标本身就是归一化的法向量）
+      vec3 normal = normalize(spherePos);
+      
+      // 归一化光源方向（使用xyz分量，忽略w分量）
+      vec3 lightDir = normalize(lightDirection.xyz);
+      
+      // 朗伯光照模型：计算法向量与光源方向的点积
+      float lightIntensity = dot(normal, lightDir);
+      
+      // 光照常量定义（按您的要求使用常量）
+      const float ambientLight = 0.2;    // 环境光强度（降低以增强对比度）
+      const float shadowStrength = 1.0;  // 阴影强度（提高以增强效果）
+      
+      // 使用smoothstep创建平滑的阴影过渡，避免硬边界
+      // lightIntensity 范围从 [-1, 1]
+      // smoothstep(-0.2, 0.3, lightIntensity) 在-0.2到0.3之间创建平滑过渡
+      // 这样可以消除明显的阴影边界
+      float smoothLighting = smoothstep(-0.2, 0.3, lightIntensity);
+      
+      // 最终光照 = 环境光 + 平滑的方向光
+      float finalLighting = ambientLight + smoothLighting * shadowStrength;
+      
+      return finalLighting;
+  }
+
   void main () {
     vec4 o = vec4(1, 1, 1, 1);
 
@@ -239,7 +295,17 @@ CCProgram fs %{
     
     // 程序化颜色生成模式（类似turbulent.effect）
     vec3 proceduralColor = generateProceduralColor(turbulentPos);
-    o = vec4(proceduralColor, 1.0);
+    
+    // === 应用光照效果 ===
+    // 计算球面光照强度
+    float lightingFactor = calculateLighting(spherePos);
+    
+    // 分离光照和纹理：保持湍流纹理的基础亮度，光照作为调制
+    // 公式：基础亮度(0.7) + 光照调制(0.3 * lightingFactor)
+    // 这样确保即使在阴影区域，湍流纹理仍然可见
+    vec3 litColor = proceduralColor * (0.7 + 0.3 * lightingFactor);
+    
+    o = vec4(litColor, 1.0);
 
     o *= v_color;
 

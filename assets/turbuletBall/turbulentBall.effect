@@ -1,0 +1,259 @@
+// Copyright (c) 2017-2018 Xiamen Yaji Software Co., Ltd.
+
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: vs
+      frag: fs
+      blendState:
+        targets:
+        - blend: true
+      rasterizerState:
+        cullMode: none
+      properties:
+        texture: { value: white }
+        alphaThreshold: { value: 0.5 }
+        # ========== 球面映射参数 ==========
+        matrixRow0: { value: [1, 0, 0, 0] }
+        matrixRow1: { value: [0, 1, 0, 0] }
+        matrixRow2: { value: [0, 0, 1, 0] }
+        matrixRow3: { value: [0, 0, 0, 1] }
+        # ========== 湍流效果核心参数 ==========
+        # 湍流动画速度 - 控制湍流模式的时间变化速度
+        # 范围说明：0.0=静态，0.3=缓慢流动，1.0=中等速度，2.0=快速流动
+        # 视觉效果：值越大湍流变化越快，产生更动感的效果
+        turbulenceSpeed: { value: 0.5, range: [0.0, 2.0] }
+        
+        # 湍流振幅 - 控制湍流扰动的强度
+        # 范围说明：0.0=无扰动，0.7=中等扰动，2.0=强烈扰动
+        # 视觉效果：值越大图案扭曲变形越明显，产生更剧烈的湍流效果
+        turbulenceAmplitude: { value: 0.7, range: [0.0, 2.0] }
+        
+        # 湍流基础频率 - 控制湍流的基本波长和尺度
+        # 范围说明：0.1=大尺度缓慢变化，2.0=中等尺度，10.0=小尺度快速变化
+        # 视觉效果：值越大湍流图案越密集细腻，值越小图案越粗糙宏观
+        turbulenceFrequency: { value: 8.5, range: [0.1, 10.0] }
+        
+        # 湍流层数(倍频程) - 控制湍流的复杂度和细节层次
+        # 范围说明：1.0=单层简单波动，10.0=多层复杂结构，20.0=极其细腻的分形细节
+        # 视觉效果：值越大湍流越复杂，层次越丰富，但计算量也越大
+        turbulenceOctaves: { value: 14.9, range: [1.0, 20.0] }
+        
+        # 湍流指数 - 控制频率递增的速度(分形维度)
+        # 范围说明：1.0=线性递增，1.4=适中递增，3.0=指数递增
+        # 视觉效果：值越大高频细节衰减越快，低频结构越突出
+        turbulenceExp: { value: 1.0, range: [1.0, 3.0] }
+        
+        # 湍流整体强度 - 全局坐标缩放系数
+        # 范围说明：0.0=无效果，1.0=标准强度，2.0=放大效果
+        # 视觉效果：影响整个湍流效果的坐标范围和密度
+        turbulenceIntensity: { value: 0.8, range: [0.0, 2.0] }
+        
+        # ========== 颜色调制参数 ==========
+        # 整体颜色调制 - 影响最终输出颜色的色调
+        # 默认值：白色(1,1,1,1)表示不改变原始颜色
+        # 视觉效果：可以给湍流效果添加特定的颜色主题(如蓝色海洋、红色火焰等)
+        overallColor: { value: [1.0, 1.0, 1.0, 1.0], editor: { type: color } }
+        
+        # 颜色强度倍数 - 控制颜色的亮度和饱和度
+        # 范围说明：0.0=完全黑色，1.0=原始亮度，3.0=高强度发光效果
+        # 视觉效果：值越大颜色越鲜艳明亮，可产生发光或过曝效果
+        colorIntensity: { value: 3.0, range: [0.0, 3.0] }
+}%
+
+
+CCProgram vs %{
+  precision highp float;
+
+  #include <cc-global>
+  #include <cc-local>
+
+  in vec3 a_position;
+  in vec4 a_color;
+  out vec4 v_color;
+
+  #if USE_TEXTURE
+  in vec2 a_uv0;
+  out vec2 v_uv0;
+  #endif
+
+  void main () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if CC_USE_MODEL
+    pos = cc_matViewProj * cc_matWorld * pos;
+    #else
+    pos = cc_matViewProj * pos;
+    #endif
+
+    #if USE_TEXTURE
+    v_uv0 = a_uv0;
+    #endif
+
+    v_color = a_color;
+
+    gl_Position = pos;
+  }
+}%
+
+
+CCProgram fs %{
+  precision highp float;
+
+  #include <alpha-test>
+  #include <texture>
+  #include <cc-global>
+
+  in vec4 v_color;
+  in vec2 v_uv0;
+
+  uniform sampler2D texture;
+
+  // 球面映射参数
+  uniform mat4Param {
+    vec4 matrixRow0;
+    vec4 matrixRow1;
+    vec4 matrixRow2;
+    vec4 matrixRow3;
+  };
+
+  // 湍流效果参数
+  uniform Turbulence {
+    vec4 overallColor;      // 整体颜色调制
+    float turbulenceSpeed;
+    float turbulenceAmplitude; 
+    float turbulenceFrequency;
+    float turbulenceOctaves;
+    float turbulenceExp;
+    float turbulenceIntensity;
+    float colorIntensity;   // 颜色强度倍数
+  };
+
+  /**
+   * 湍流函数 - 核心算法
+   * 功能：对输入坐标应用多层湍流扰动，产生有机的流体效果
+   * 
+   * 原理：
+   * 1. 使用分形噪声技术，叠加多个不同频率的正弦波
+   * 2. 每层都旋转坐标系，避免产生明显的方向性和重复模式
+   * 3. 通过时间偏移实现动画效果
+   * 4. 振幅随频率递减，保持大尺度结构的同时增加细节
+   */
+  vec2 turbulence(vec2 p)
+  {
+      // 初始化频率（从基础频率开始，每层递增）
+      float freq = turbulenceFrequency;
+      
+      // 旋转矩阵：角度约为36.87度 (arctan(0.8/0.6))
+      // 这个角度是精心选择的，能产生自然的湍流效果
+      mat2 rot = mat2(0.6, -0.8, 0.8, 0.6);
+      
+      // === 多层湍流叠加循环 ===
+      // 这是分形噪声的核心：多个不同尺度的噪声层叠加
+      // 注意：使用固定的最大循环次数以兼容所有GLSL版本
+      for(float i = 0.0; i < 20.0; i++)
+      {
+          // 动态控制实际执行的层数
+          if(i >= turbulenceOctaves) break;
+          
+          // 计算当前层的相位
+          // 解析：freq * (p * rot).y - 沿旋转后的y轴采样
+          //      turbulenceSpeed * cc_time.x - 时间动画偏移
+          //      i - 每层的相位偏移，防止层间同步
+          float phase = freq * (p * rot).y + turbulenceSpeed * cc_time.x + i;
+          
+          // 添加垂直于旋转方向的正弦波扰动
+          // rot[0] = (0.6, -0.8) 是旋转矩阵的第一列，表示新的x轴方向
+          // sin(phase) 产生波动，除以freq使高频波振幅更小
+          p += turbulenceAmplitude * rot[0] * sin(phase) / freq;
+          
+          // 为下一层准备：再次旋转坐标系
+          // 累积旋转确保每层的方向都不同，产生复杂的湍流结构
+          rot *= mat2(0.6, -0.8, 0.8, 0.6);
+          
+          // 频率递增：下一层的波长更短，细节更精细
+          // 这符合湍流的分形特性：大尺度包含小尺度结构
+          freq *= turbulenceExp;
+      }
+      
+      // 返回经过湍流扰动的坐标
+      return p;
+  }
+
+  /**
+   * 程序化颜色生成函数 - 来自noname的mainImage逻辑 + 单色调制
+   * 功能：根据湍流坐标生成蓝黄渐变的动态颜色，然后应用整体颜色调制
+   */
+  vec3 generateProceduralColor(vec2 turbulentPos)
+  {
+      vec3 col = overallColor.rgb * colorIntensity;
+      
+      // 复杂的亮度调制
+      // cos(p*3.) 和 sin(-p.yx*3.*.618) 产生复杂的波动模式
+      // 0.618 是黄金比例的倒数，产生非周期性的美观图案
+      // turbulentPos.yx 是坐标的交换，增加复杂性
+      // +2.0 确保分母不为零，避免除零错误
+      float brightness = dot(cos(turbulentPos * 3.0), sin(-turbulentPos.yx * 3.0 * 0.618)) + 2.0;
+      col /= brightness; 
+      
+      // 指数色调映射 (Exponential Tone Mapping)
+      // 1.0 - exp(-col) 是标准的指数色调映射公式
+      // 作用：
+      // - 将无限的颜色范围压缩到 [0,1]
+      // - 保持暗部细节，压缩高亮部分
+      // - 产生更自然的对比度和饱和度
+      col = vec3(1.0) - exp(-col);
+      
+      return col;
+  }
+
+  void main () {
+    vec4 o = vec4(1, 1, 1, 1);
+
+    // === 球面坐标计算 ===
+    // 将UV坐标转换为标准化的球面坐标 (-1 到 1)
+    vec2 xy = v_uv0 * 2.0 - 1.0;
+    
+    float len = length(xy);
+    // 丢弃球体外部的像素
+    if (len > 1.0) {
+      discard;
+    }
+
+    // 计算球面的Z坐标
+    float z = sqrt(1.0 - len * len);
+    vec3 spherePos = vec3(xy, z);
+
+    // === 应用旋转矩阵 ===
+    mat4 b_matrix = mat4(matrixRow0, matrixRow1, matrixRow2, matrixRow3);
+    vec4 rotatePos = b_matrix * vec4(spherePos, 1.0);
+    vec3 p3d = rotatePos.xyz;
+
+    // === 坐标系统转换 ===
+    // 将旋转后的3D球面坐标转换为湍流坐标输入
+    // 球面前后都使用同样的湍流映射逻辑
+    vec2 centeredCoord = p3d.xy * turbulenceIntensity;
+    
+    // === 应用湍流变换 ===
+    vec2 turbulentPos = turbulence(centeredCoord);
+    
+    // 程序化颜色生成模式（类似turbulent.effect）
+    vec3 proceduralColor = generateProceduralColor(turbulentPos);
+    o = vec4(proceduralColor, 1.0);
+
+    o *= v_color;
+
+    ALPHA_TEST(o);
+
+    // === 边缘软化效果 ===
+    // 在球体边缘应用平滑的透明度渐变
+    float alpha = smoothstep(1.0, 0.9, len);
+    o.a *= alpha;
+
+    #if USE_BGRA
+      gl_FragColor = o.bgra;
+    #else
+      gl_FragColor = o.rgba;
+    #endif
+  }
+}%

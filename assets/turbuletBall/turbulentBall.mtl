@@ -1,0 +1,26 @@
+{
+  "__type__": "cc.Material",
+  "_name": "turbulentBall",
+  "_objFlags": 0,
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "8667806d-92cf-436b-be56-65693df0e184"
+  },
+  "_techniqueIndex": 0,
+  "_techniqueData": {
+    "0": {
+      "props": {
+        "overallColor": {
+          "__type__": "cc.Color",
+          "r": 0,
+          "g": 255,
+          "b": 0,
+          "a": 255
+        }
+      },
+      "defines": {
+        "USE_TEXTURE": true
+      }
+    }
+  }
+}

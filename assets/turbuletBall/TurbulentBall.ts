@@ -33,7 +33,7 @@ export default class TurbulentBall extends cc.Component {
         'turbulenceOctaves': [1.0, 20.0],
         'turbulenceExp': [1.0, 3.0],
         'turbulenceIntensity': [0.0, 2.0],
-        'colorIntensity': [0.0, 8.0],
+        'colorIntensity': [0.4, 1.5],
     };
 
     private material: cc.Material;
@@ -98,6 +98,7 @@ export default class TurbulentBall extends cc.Component {
         else if (this.propMap[propName] !== val) {
             this.propMap[propName] = val;
         }
+        console.log(val);
         this.material.setProperty(propName, val);
     }
 
@@ -109,7 +110,7 @@ export default class TurbulentBall extends cc.Component {
         const min = data[0];
         const max = data[1];
         const res = min + (max - min) * sliderVal;
-        return Number(res.toFixed(1));
+        return Number(res.toFixed(2));
     }
 
     calculateAbsolutionRotation(totalRad: number, x: number, y: number, z: number) {

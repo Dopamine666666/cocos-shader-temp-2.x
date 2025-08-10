@@ -63,7 +63,7 @@ CCEffect %{
         # 颜色强度倍数 - 控制颜色的亮度和饱和度
         # 范围说明：0.0=完全黑色，1.0=原始亮度，3.0=高强度发光效果
         # 视觉效果：值越大颜色越鲜艳明亮，可产生发光或过曝效果
-        colorIntensity: { value: 5.0, range: [0.0, 8.0] }
+        colorIntensity: { value: 1.0, range: [0.4, 1.5] }
 }%
 
 
@@ -191,29 +191,120 @@ CCProgram fs %{
   }
 
   /**
-   * 程序化颜色生成函数
+   * RGB to HSV 颜色空间转换函数
+   * 参数：rgb - RGB颜色 [0,1]
+   * 返回：hsv - HSV颜色 (H[0,1], S[0,1], V[0,1])
+   */
+  vec3 rgb2hsv(vec3 rgb) {
+      float cmax = max(rgb.r, max(rgb.g, rgb.b));
+      float cmin = min(rgb.r, min(rgb.g, rgb.b));
+      float delta = cmax - cmin;
+      
+      vec3 hsv = vec3(0.0);
+      
+      // 计算色相 H
+      if (delta > 0.0) {
+          if (cmax == rgb.r) {
+              hsv.x = mod((rgb.g - rgb.b) / delta, 6.0);
+          } else if (cmax == rgb.g) {
+              hsv.x = (rgb.b - rgb.r) / delta + 2.0;
+          } else {
+              hsv.x = (rgb.r - rgb.g) / delta + 4.0;
+          }
+          hsv.x /= 6.0;
+      }
+      
+      // 计算饱和度 S
+      hsv.y = (cmax > 0.0) ? delta / cmax : 0.0;
+      
+      // 计算明度 V
+      hsv.z = cmax;
+      
+      return hsv;
+  }
+
+  /**
+   * HSV to RGB 颜色空间转换函数
+   * 参数：hsv - HSV颜色 (H[0,1], S[0,1], V[0,1])
+   * 返回：rgb - RGB颜色 [0,1]
+   */
+  vec3 hsv2rgb(vec3 hsv) {
+      float h = hsv.x * 6.0;
+      float s = hsv.y;
+      float v = hsv.z;
+      
+      float c = v * s;
+      float x = c * (1.0 - abs(mod(h, 2.0) - 1.0));
+      float m = v - c;
+      
+      vec3 rgb = vec3(0.0);
+      
+      if (h < 1.0) {
+          rgb = vec3(c, x, 0.0);
+      } else if (h < 2.0) {
+          rgb = vec3(x, c, 0.0);
+      } else if (h < 3.0) {
+          rgb = vec3(0.0, c, x);
+      } else if (h < 4.0) {
+          rgb = vec3(0.0, x, c);
+      } else if (h < 5.0) {
+          rgb = vec3(x, 0.0, c);
+      } else {
+          rgb = vec3(c, 0.0, x);
+      }
+      
+      return rgb + m;
+  }
+
+  /**
+   * 程序化颜色生成函数 - 明暗分离控制版本
+   * 功能：只调制HSV中的V（明度），保持H（色相）和S（饱和度）不变
+   * 特点：分别控制变亮和变暗的幅度，提供更精细的明度调节
+   * 
+   * 控制参数：
+   * - brightenRange: 变亮范围（默认15%）
+   * - darkenRange: 变暗范围（默认5%）
    */
   vec3 generateProceduralColor(vec2 turbulentPos)
   {
-      vec3 col = overallColor.rgb * colorIntensity;
+      // 获取基础颜色并应用颜色强度
+      vec3 baseColor = overallColor.rgb * colorIntensity;
       
-      // 复杂的亮度调制
-      // cos(p*3.) 和 sin(-p.yx*3.*.618) 产生复杂的波动模式
-      // 0.618 是黄金比例的倒数，产生非周期性的美观图案
-      // turbulentPos.yx 是坐标的交换，增加复杂性
-      // +2.0 确保分母不为零，避免除零错误
+      // 转换到HSV颜色空间
+      vec3 hsv = rgb2hsv(baseColor);
+      
+      // 计算湍流亮度调制因子
       float brightness = dot(cos(turbulentPos * 3.0), sin(-turbulentPos.yx * 3.0 * 0.618)) + 2.0;
-      col /= brightness; 
       
-      // 指数色调映射 (Exponential Tone Mapping)
-      // 1.0 - exp(-col) 是标准的指数色调映射公式
-      // 作用：
-      // - 将无限的颜色范围压缩到 [0,1]
-      // - 保持暗部细节，压缩高亮部分
-      // - 产生更自然的对比度和饱和度
-      col = vec3(1.0) - exp(-col);
+      // 根据原始明度动态确定变化范围，明暗分开控制
+      float originalValue = hsv.z;
       
-      return col;
+      // 分别定义变亮和变暗的幅度（可独立调节）
+      const float brightenRange = 0.15;  // 变亮范围：15%
+      const float darkenRange = 0.05;    // 变暗范围：5%
+      
+      // 计算基于原始明度的分离变化范围
+      float minValue = max(0.1, originalValue - darkenRange);   // 下限：原值-darkenRange
+      float maxValue = min(1.0, originalValue + brightenRange); // 上限：原值+brightenRange
+      
+      // 将brightness值标准化到[-1,1]
+      float normalizedBrightness = clamp((brightness - 2.0) / 2.0, -1.0, 1.0);
+      
+      // 根据brightness正负值分别应用不同的变化范围
+      float adjustedValue;
+      if (normalizedBrightness >= 0.0) {
+          // 正值：变亮，使用brightenRange
+          adjustedValue = originalValue + normalizedBrightness * brightenRange;
+      } else {
+          // 负值：变暗，使用darkenRange
+          adjustedValue = originalValue + normalizedBrightness * darkenRange;
+      }
+      
+      // 应用调制后的明度值，确保在合理范围内
+      hsv.z = clamp(adjustedValue, minValue, maxValue);
+      
+      // 转换回RGB颜色空间
+      return hsv2rgb(hsv);
   }
 
   /**

@@ -12,9 +12,9 @@
       "props": {
         "overallColor": {
           "__type__": "cc.Color",
-          "r": 2,
-          "g": 207,
-          "b": 2,
+          "r": 0,
+          "g": 255,
+          "b": 0,
           "a": 255
         },
         "lightDirection": {

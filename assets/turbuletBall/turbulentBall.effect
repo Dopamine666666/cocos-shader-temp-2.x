@@ -191,8 +191,7 @@ CCProgram fs %{
   }
 
   /**
-   * 程序化颜色生成函数 - 来自noname的mainImage逻辑 + 单色调制
-   * 功能：根据湍流坐标生成蓝黄渐变的动态颜色，然后应用整体颜色调制
+   * 程序化颜色生成函数
    */
   vec3 generateProceduralColor(vec2 turbulentPos)
   {

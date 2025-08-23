@@ -1,0 +1,17 @@
+{
+  "__type__": "cc.Material",
+  "_name": "glitch",
+  "_objFlags": 0,
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "34f2e8b9-c825-47de-a7ef-2b357b88d4d0"
+  },
+  "_techniqueIndex": 0,
+  "_techniqueData": {
+    "0": {
+      "defines": {
+        "USE_TEXTURE": true
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "__type__": "cc.Material",
+  "_name": "oldFilm",
+  "_objFlags": 0,
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "938671f2-fa6d-4b18-845c-865ac34f27b4"
+  },
+  "_techniqueIndex": 0,
+  "_techniqueData": {
+    "0": {
+      "defines": {
+        "USE_TEXTURE": true
+      }
+    }
+  }
+}

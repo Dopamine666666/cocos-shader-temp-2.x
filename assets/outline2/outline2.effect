@@ -1,0 +1,121 @@
+// Copyright (c) 2017-2018 Xiamen Yaji Software Co., Ltd.
+
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: vs
+      frag: fs
+      blendState:
+        targets:
+        - blend: true
+      rasterizerState:
+        cullMode: none
+      properties:
+        texture: { value: white }
+        alphaThreshold: { value: 0.5 }
+        textureSize: { value: [1024, 1024] }
+}%
+
+
+CCProgram vs %{
+  precision highp float;
+
+  #include <cc-global>
+  #include <cc-local>
+
+  in vec3 a_position;
+  in vec4 a_color;
+  out vec4 v_color;
+
+  #if USE_TEXTURE
+  in vec2 a_uv0;
+  out vec2 v_uv0;
+  #endif
+
+  void main () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if CC_USE_MODEL
+    pos = cc_matViewProj * cc_matWorld * pos;
+    #else
+    pos = cc_matViewProj * pos;
+    #endif
+
+    #if USE_TEXTURE
+    v_uv0 = a_uv0;
+    #endif
+
+    v_color = a_color;
+
+    gl_Position = pos;
+  }
+}%
+
+
+CCProgram fs %{
+  precision highp float;
+
+  #include <alpha-test>
+  #include <texture>
+
+  in vec4 v_color;
+
+  #if USE_TEXTURE
+  in vec2 v_uv0;
+  uniform sampler2D texture;
+  #endif
+
+  uniform outline2Param {
+    vec2 textureSize;
+  };
+
+  // float luminance(vec4 c) {
+  //     return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;    
+  // }
+
+  void main () {
+    vec4 o = vec4(1, 1, 1, 1);
+
+    #if USE_TEXTURE
+      CCTexture(texture, v_uv0, o);
+    #endif
+
+    // 计算单个像素的大小，textureSize为GLSL ES3.00的函数，cc默认使用GLSL ES1.00；推荐使用uniform传入尺寸
+    vec2 pixelSize = 1.0 / textureSize;
+
+    // 获取八个方向的像素
+    vec4 topLeft = texture(texture, v_uv0 + vec2(-pixelSize.x, pixelSize.y));
+    vec4 topRight = texture(texture, v_uv0 + vec2(pixelSize.x, pixelSize.y));
+    vec4 bottomLeft = texture(texture, v_uv0 + vec2(-pixelSize.x, -pixelSize.y));
+    vec4 bottomRight = texture(texture, v_uv0 + vec2(pixelSize.x, -pixelSize.y));
+
+    vec4 top = texture(texture, v_uv0 + vec2(0.0, pixelSize.y));
+    vec4 bottom = texture(texture, v_uv0 + vec2(0.0, -pixelSize.y));
+    vec4 left = texture(texture, v_uv0 + vec2(-pixelSize.x, 0.0));
+    vec4 right = texture(texture, v_uv0 + vec2(pixelSize.x, 0.0));
+
+    // 通过sobel算子计算水平与垂直方向的梯度
+    // 分别表示对应方向上亮度变化的趋势,gx为正，表示从左向右变亮
+    vec4 gx = -topLeft - 2.0 * left - bottomLeft + topRight + 2.0 * right + bottomRight;
+    vec4 gy = -topLeft - 2.0 * top - topRight + bottomLeft + 2.0 * bottom + bottomRight;
+
+    float edge = length(vec2(gx.r, gy.r));
+
+    // multi pass edge, calculate by light
+    // float edge = length(vec2(luminance(gx), luminance(gy)));
+
+    edge = smoothstep(0.1, 0.3, edge); 
+
+    // only outline
+    vec4 finalColor = vec4(vec3(1.0 - min(edge * 5.0, 1.0)), 1.0);
+
+    // finalColor *= v_color;
+    // o *= v_color;
+
+    // vec4 finalColor = vec4(o.rgb * (1.0 - edge), 1.0);
+
+    // ALPHA_TEST(o);
+
+    gl_FragColor = finalColor;
+  }
+}%

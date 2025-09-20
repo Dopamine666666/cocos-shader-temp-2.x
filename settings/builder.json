@@ -1,5 +1,5 @@
 {
-  "title": "shader-temp-2.x",
+  "title": "shaderTemp",
   "packageName": "org.cocos2d.demo",
   "startScene": "feb9b4d1-1c0b-4d56-9ff3-7ab1959f1f37",
   "excludeScenes": [],
@@ -16,8 +16,8 @@
   "mainIsRemote": false,
   "optimizeHotUpdate": false,
   "md5Cache": true,
-  "nativeMd5Cache": true,
-  "encryptJs": true,
+  "nativeMd5Cache": false,
+  "encryptJs": false,
   "xxteaKey": "7d04f6dd-db2d-43",
   "zipCompressJs": true,
   "fb-instant-games": {},
